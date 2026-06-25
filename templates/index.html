@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Incident Feed</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0e0e0f;
+      --surface: #161618;
+      --raised:  #1e1e22;
+      --border:  #2a2a2e;
+      --text:    #e8e8ea;
+      --muted:   #6b6b72;
+      --accent:  #4fc3f7;
+
+      --sev1: #4caf50;
+      --sev2: #8bc34a;
+      --sev3: #ffc107;
+      --sev4: #ff7043;
+      --sev5: #e53935;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .view-tabs {
+      display: flex;
+      gap: 2px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 5px 14px;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      outline: none;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab-btn:first-child { border-radius: 2px 0 0 2px; }
+    .tab-btn:last-child  { border-radius: 0 2px 2px 0; }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(79,195,247,0.06);
+    }
+
+    .tab-btn:hover:not(.active) { color: var(--text); border-color: #444; }
+
+    #stats-bar {
+      display: flex;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    #stats-bar span { color: var(--text); }
+
+    .controls {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    select, button {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      outline: none;
+    }
+    select:hover, button:hover { border-color: var(--accent); }
+
+    /* ── Views ── */
+    .view { display: none; flex: 1; overflow: hidden; }
+    .view.active { display: flex; }
+
+    /* ── Map view ── */
+    #view-map { flex-direction: row; }
+    #map { flex: 1; }
+
+    /* ── Map sidebar ── */
+    #map-sidebar {
+      width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    #map-feed { overflow-y: auto; flex: 1; }
+
+    .map-card {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .map-card:hover  { background: var(--raised); }
+    .map-card.active { background: #1a1e2a; border-left: 2px solid var(--accent); padding-left: 12px; }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .card-headline { font-size: 12px; line-height: 1.4; }
+    .card-meta { font-size: 10px; color: var(--muted); }
+
+    /* ── Detail panel ── */
+    #detail {
+      border-top: 1px solid var(--border);
+      padding: 12px 14px;
+      font-size: 11px;
+      line-height: 1.6;
+      display: none;
+    }
+    #detail.visible { display: block; }
+    #detail h3 { font-size: 12px; margin-bottom: 8px; }
+    .detail-row { display: flex; gap: 8px; margin-bottom: 3px; }
+    .detail-label { color: var(--muted); min-width: 68px; }
+    #detail a { color: var(--accent); text-decoration: none; }
+
+    /* ── Legend ── */
+    #legend {
+      padding: 8px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 3px; }
+
+    /* ── Reports view ── */
+    #view-reports { flex-direction: column; }
+
+    #reports-toolbar {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    #reports-count { color: var(--text); }
+
+    #reports-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .report-row {
+      display: grid;
+      grid-template-columns: 36px 72px 1fr 140px 90px 80px;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      transition: background 0.1s, border-color 0.1s;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .report-row:hover { background: var(--raised); border-color: #3a3a40; border-left-color: var(--accent); }
+
+    .sev-block {
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+      padding: 3px 0;
+      border-radius: 2px;
+    }
+
+    .type-tag {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 6px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+
+    .report-headline {
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .report-loc  { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .report-date { font-size: 10px; color: var(--muted); }
+    .report-src  { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    #reports-list-header {
+      display: grid;
+      grid-template-columns: 36px 72px 1fr 140px 90px 80px;
+      gap: 12px;
+      padding: 4px 14px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    #reports-list-header span {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    #reports-list-header span:hover { color: var(--text); }
+    #reports-list-header span.sort-active { color: var(--accent); }
+
+    #pagination {
+      padding: 10px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    #pagination button { padding: 4px 12px; }
+    #pagination button:disabled { opacity: 0.3; cursor: default; }
+    #page-info { color: var(--text); }
+
+    /* ── Ticker ── */
+    #ticker {
+      height: 42px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    #ticker::before, #ticker::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 40px;
+      z-index: 2;
+      pointer-events: none;
+    }
+    #ticker::before { left: 0;  background: linear-gradient(to right, var(--surface), transparent); }
+    #ticker::after  { right: 0; background: linear-gradient(to left,  var(--surface), transparent); }
+
+    .ticker-track {
+      display: inline-flex;
+      white-space: nowrap;
+      animation: ticker-scroll linear infinite;
+      font-size: 12px;
+      color: var(--muted);
+      gap: 0;
+    }
+
+    #ticker:hover .ticker-track { animation-play-state: paused; }
+
+    .ticker-item {
+      padding: 0 32px;
+    }
+
+    .ticker-time   { color: var(--accent); margin-right: 6px; }
+    .ticker-head   { color: var(--text); }
+    .ticker-source { color: var(--muted); margin-left: 6px; }
+    .ticker-sep    { color: var(--border); margin: 0 8px; }
+
+    @keyframes ticker-scroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ── Shared badge helper ── */
+    .leaflet-popup-content-wrapper {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: 0;
+      font-family: inherit; font-size: 12px;
+    }
+    .leaflet-popup-tip { background: var(--surface); }
+    .leaflet-control-zoom a {
+      background: var(--surface) !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="view-tabs">
+    <button class="tab-btn active" data-view="map">Map</button>
+    <button class="tab-btn" data-view="reports">Reports</button>
+  </div>
+
+  <div id="stats-bar">
+    <div>total <span id="stat-count">—</span></div>
+    <div>mapped <span id="stat-geocoded">—</span></div>
+    <div id="stat-updated" style="color:var(--muted);font-size:10px"></div>
+  </div>
+
+  <div class="controls">
+    <select id="filter-since">
+      <option value="24h">24h</option>
+      <option value="7d" selected>7d</option>
+      <option value="30d">30d</option>
+      <option value="all">all time</option>
+    </select>
+    <select id="filter-sev">
+      <option value="1">all sev</option>
+      <option value="2">sev ≥ 2</option>
+      <option value="3">sev ≥ 3</option>
+      <option value="4">sev ≥ 4</option>
+    </select>
+    <select id="filter-state">
+      <option value="">all states</option>
+      <option>AL</option><option>AK</option><option>AZ</option><option>AR</option>
+      <option>CA</option><option>CO</option><option>CT</option><option>DC</option>
+      <option>DE</option><option>FL</option><option>GA</option><option>HI</option>
+      <option>ID</option><option>IL</option><option>IN</option><option>IA</option>
+      <option>KS</option><option>KY</option><option>LA</option><option>ME</option>
+      <option>MD</option><option>MA</option><option>MI</option><option>MN</option>
+      <option>MS</option><option>MO</option><option>MT</option><option>NE</option>
+      <option>NV</option><option>NH</option><option>NJ</option><option>NM</option>
+      <option>NY</option><option>NC</option><option>ND</option><option>OH</option>
+      <option>OK</option><option>OR</option><option>PA</option><option>RI</option>
+      <option>SC</option><option>SD</option><option>TN</option><option>TX</option>
+      <option>UT</option><option>VT</option><option>VA</option><option>WA</option>
+      <option>WV</option><option>WI</option><option>WY</option>
+    </select>
+    <select id="filter-type">
+      <option value="">all types</option>
+      <option value="shooting">shooting</option>
+      <option value="stabbing">stabbing</option>
+      <option value="bombing">bombing</option>
+      <option value="homicide">homicide</option>
+      <option value="robbery">robbery</option>
+      <option value="assault">assault</option>
+      <option value="threat">threat</option>
+      <option value="theft">theft</option>
+      <option value="arrest">arrest</option>
+      <option value="missing">missing</option>
+    </select>
+    <button id="btn-refresh">↺</button>
+  </div>
+</header>
+
+<!-- MAP VIEW -->
+<div id="view-map" class="view active">
+  <div id="map"></div>
+  <div id="map-sidebar">
+    <div id="sidebar-header">mapped — <span id="map-feed-count">0</span></div>
+    <div id="map-feed"></div>
+    <div id="detail">
+      <h3 id="detail-headline"></h3>
+      <div class="detail-row"><span class="detail-label">type</span><span id="detail-type"></span></div>
+      <div class="detail-row"><span class="detail-label">severity</span><span id="detail-sev"></span></div>
+      <div class="detail-row"><span class="detail-label">location</span><span id="detail-loc"></span></div>
+      <div class="detail-row"><span class="detail-label">source</span><span id="detail-source"></span></div>
+      <div class="detail-row"><span class="detail-label">published</span><span id="detail-pub"></span></div>
+      <div class="detail-row"><span class="detail-label">link</span><a id="detail-url" href="#" target="_blank">open ↗</a></div>
+    </div>
+    <div id="legend">
+      <span>sev</span>
+      <span><span class="dot" style="background:var(--sev1)"></span>1</span>
+      <span><span class="dot" style="background:var(--sev2)"></span>2</span>
+      <span><span class="dot" style="background:var(--sev3)"></span>3</span>
+      <span><span class="dot" style="background:var(--sev4)"></span>4</span>
+      <span><span class="dot" style="background:var(--sev5)"></span>5</span>
+    </div>
+  </div>
+</div>
+
+<!-- REPORTS VIEW -->
+<div id="view-reports" class="view">
+  <div id="reports-toolbar">
+    <span>showing <span id="reports-count">—</span> of <span id="reports-total">—</span></span>
+  </div>
+  <div id="reports-list-header">
+    <span data-sort="sev">sev</span>
+    <span data-sort="type">type</span>
+    <span data-sort="headline">headline</span>
+    <span data-sort="location">location</span>
+    <span data-sort="date">date</span>
+    <span data-sort="source">source</span>
+  </div>
+  <div id="reports-list"></div>
+  <div id="pagination">
+    <button id="btn-prev" disabled>← prev</button>
+    <span id="page-info">page 1</span>
+    <button id="btn-next">next →</button>
+  </div>
+</div>
+
+<!-- TICKER -->
+<div id="ticker"><div class="ticker-track" id="ticker-track"></div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+const SEV_COLORS = ['', '#4caf50', '#8bc34a', '#ffc107', '#ff7043', '#e53935'];
+const TYPE_ABBREV = {
+  shooting:'GUN', stabbing:'STB', bombing:'BOM', homicide:'HOM',
+  robbery:'ROB', assault:'AST', threat:'THR', theft:'THF',
+  arrest:'ARR', missing:'MIS', suspicious:'SUS', pursuit:'PST', general:'GEN',
+};
+
+function sevColor(s) { return SEV_COLORS[s] || '#6b6b72'; }
+function fmtDate(s) { return s ? s.slice(0,10) : '—'; }
+function fmtLoc(inc) {
+  return [inc.city, inc.state].filter(Boolean).join(', ') || inc.location_raw || '—';
+}
+function filterParams() {
+  const p = new URLSearchParams({
+    since: document.getElementById('filter-since').value,
+    severity: document.getElementById('filter-sev').value,
+  });
+  const t = document.getElementById('filter-type').value;
+  if (t) p.set('type', t);
+  const s = document.getElementById('filter-state').value;
+  if (s) p.set('state', s);
+  return p;
+}
+
+function _relativeTime(isoStr) {
+  if (!isoStr) return null;
+  const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (diff < 60)  return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+// ── MAP ──────────────────────────────────────────────────────────────────────
+const map = L.map('map').setView([39.5, -98.35], 4);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO', maxZoom: 19,
+}).addTo(map);
+
+let markers = {}, pinnedId = null, mapIncidents = [];
+let clusterGroup = L.markerClusterGroup({ maxClusterRadius: 40, disableClusteringAtZoom: 11 });
+map.addLayer(clusterGroup);
+
+function populateDetail(inc) {
+  const d = document.getElementById('detail');
+  d.classList.add('visible');
+  document.getElementById('detail-headline').textContent = inc.headline || '—';
+  document.getElementById('detail-type').textContent = inc.incident_type;
+  document.getElementById('detail-sev').textContent = '★'.repeat(inc.severity) + '☆'.repeat(5 - inc.severity);
+  document.getElementById('detail-loc').textContent = fmtLoc(inc);
+  document.getElementById('detail-source').textContent = inc.source || '—';
+  document.getElementById('detail-pub').textContent = inc.published_at ? inc.published_at.slice(0,16).replace('T',' ') : '—';
+  document.getElementById('detail-url').href = inc.source_url || '#';
+}
+
+function makeMarker(inc) {
+  const color = sevColor(inc.severity);
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.2);box-shadow:0 0 6px ${color}88"></div>`,
+    iconSize: [12,12], iconAnchor: [6,6],
+  });
+  const m = L.marker([inc.lat, inc.lng], { icon });
+
+  m.on('mouseover', () => populateDetail(inc));
+  m.on('mouseout', () => {
+    if (pinnedId) {
+      const pinned = mapIncidents.find(i => i.id === pinnedId);
+      if (pinned) populateDetail(pinned);
+    } else {
+      document.getElementById('detail').classList.remove('visible');
+    }
+  });
+  m.on('click', () => selectMapIncident(inc.id));
+  return m;
+}
+
+function renderMapFeed(data) {
+  const feed = document.getElementById('map-feed');
+  feed.innerHTML = '';
+  document.getElementById('map-feed-count').textContent = data.length;
+  data.forEach(inc => {
+    const color = sevColor(inc.severity);
+    const abbrev = TYPE_ABBREV[inc.incident_type] || '???';
+    const card = document.createElement('div');
+    card.className = 'map-card';
+    card.dataset.id = inc.id;
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="card-headline">${inc.headline || '—'}</div>
+        <span class="type-tag" style="background:${color}22;color:${color};border:1px solid ${color}44">${abbrev}</span>
+      </div>
+      <div class="card-meta">${fmtLoc(inc)} · ${fmtDate(inc.published_at)}</div>`;
+    card.addEventListener('click', () => selectMapIncident(inc.id));
+    feed.appendChild(card);
+  });
+}
+
+function selectMapIncident(id) {
+  pinnedId = id;
+  const inc = mapIncidents.find(i => i.id === id);
+  if (!inc) return;
+  document.querySelectorAll('.map-card').forEach(c => c.classList.remove('active'));
+  const card = document.querySelector(`.map-card[data-id="${id}"]`);
+  if (card) { card.classList.add('active'); card.scrollIntoView({ block: 'nearest' }); }
+  if (inc.lat) map.setView([inc.lat, inc.lng], Math.max(map.getZoom(), 8));
+  populateDetail(inc);
+}
+
+async function loadMap() {
+  const [incRes, statRes] = await Promise.all([
+    fetch('/api/incidents?' + filterParams()).then(r => r.json()),
+    fetch('/api/stats').then(r => r.json()),
+  ]);
+  mapIncidents = incRes.incidents;
+  document.getElementById('stat-count').textContent = statRes.total;
+  document.getElementById('stat-geocoded').textContent = statRes.geocoded;
+  const p = statRes.pipeline || {};
+  const updEl = document.getElementById('stat-updated');
+  if (p.finished_at) {
+    const rel = _relativeTime(p.finished_at);
+    updEl.textContent = `updated ${rel}`;
+    updEl.style.color = 'var(--muted)';
+  } else if (p.status === 'running') {
+    updEl.textContent = '⟳ pipeline running…';
+    updEl.style.color = 'var(--accent)';
+  } else {
+    updEl.textContent = '';
+  }
+  clusterGroup.clearLayers();
+  markers = {};
+  mapIncidents.forEach(inc => {
+    if (inc.lat) {
+      const m = makeMarker(inc);
+      markers[inc.id] = m;
+      clusterGroup.addLayer(m);
+    }
+  });
+  renderMapFeed(mapIncidents);
+  if (pinnedId && mapIncidents.find(i => i.id === pinnedId)) selectMapIncident(pinnedId);
+}
+
+// ── REPORTS ──────────────────────────────────────────────────────────────────
+let currentPage = 1, totalPages = 1;
+let sortCol = 'date', sortDir = 'desc';
+
+function updateSortHeaders() {
+  document.querySelectorAll('#reports-list-header span[data-sort]').forEach(el => {
+    const key = el.dataset.sort;
+    const isActive = key === sortCol;
+    el.classList.toggle('sort-active', isActive);
+    const arrow = isActive ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
+    el.textContent = key + arrow;
+  });
+}
+
+function renderReports(data, total, page, pages) {
+  totalPages = pages;
+  currentPage = page;
+  document.getElementById('reports-count').textContent = data.length;
+  document.getElementById('reports-total').textContent = total;
+  document.getElementById('page-info').textContent = `page ${page} of ${pages}`;
+  document.getElementById('btn-prev').disabled = page <= 1;
+  document.getElementById('btn-next').disabled = page >= pages;
+
+  const list = document.getElementById('reports-list');
+  list.innerHTML = '';
+
+  data.forEach(inc => {
+    const color = sevColor(inc.severity);
+    const abbrev = TYPE_ABBREV[inc.incident_type] || '???';
+    const row = document.createElement('a');
+    row.className = 'report-row';
+    row.href = inc.source_url || '#';
+    row.target = '_blank';
+    row.rel = 'noopener';
+    row.style.borderLeftColor = color;
+    row.innerHTML = `
+      <div class="sev-block" style="background:${color}22;color:${color}">${inc.severity}</div>
+      <span class="type-tag" style="background:${color}22;color:${color};border:1px solid ${color}33">${abbrev}</span>
+      <div class="report-headline">${inc.headline || '—'}</div>
+      <div class="report-loc">${fmtLoc(inc)}</div>
+      <div class="report-date">${fmtDate(inc.published_at)}</div>
+      <div class="report-src">${inc.source || '—'}</div>`;
+    list.appendChild(row);
+  });
+}
+
+async function loadReports(page = 1) {
+  const params = filterParams();
+  params.set('page', page);
+  params.set('sort', sortCol);
+  params.set('order', sortDir);
+  const res = await fetch('/api/reports?' + params).then(r => r.json());
+  renderReports(res.incidents, res.total, res.page, res.pages);
+  updateSortHeaders();
+}
+
+document.getElementById('btn-prev').addEventListener('click', () => loadReports(currentPage - 1));
+document.getElementById('btn-next').addEventListener('click', () => loadReports(currentPage + 1));
+
+document.querySelectorAll('#reports-list-header span[data-sort]').forEach(el => {
+  el.addEventListener('click', () => {
+    const key = el.dataset.sort;
+    if (key === sortCol) {
+      sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+      sortCol = key;
+      sortDir = 'desc';
+    }
+    loadReports(1);
+  });
+});
+
+// ── VIEW TABS ─────────────────────────────────────────────────────────────────
+let activeView = 'map';
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const view = btn.dataset.view;
+    if (view === activeView) return;
+    activeView = view;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
+    if (view === 'reports') loadReports(1);
+    if (view === 'map') map.invalidateSize();
+  });
+});
+
+// ── CONTROLS ──────────────────────────────────────────────────────────────────
+function refresh() {
+  if (activeView === 'map') loadMap();
+  else loadReports(1);
+}
+
+document.getElementById('btn-refresh').addEventListener('click', refresh);
+document.getElementById('filter-since').addEventListener('change', refresh);
+document.getElementById('filter-sev').addEventListener('change', refresh);
+document.getElementById('filter-type').addEventListener('change', refresh);
+document.getElementById('filter-state').addEventListener('change', refresh);
+
+// ── TICKER ────────────────────────────────────────────────────────────────────
+async function loadTicker() {
+  const res = await fetch('/api/reports?since=24h&per_page=100&sort=date&order=desc').then(r => r.json());
+  const items = res.incidents;
+  if (!items || !items.length) return;
+
+  const track = document.getElementById('ticker-track');
+
+  function buildItem(inc) {
+    const time = inc.published_at ? inc.published_at.slice(11, 16) : '--:--';
+    const loc = fmtLoc(inc);
+    const locStr = loc && loc !== '—' ? ` — ${loc}` : '';
+    return `<span class="ticker-item"><span class="ticker-time">${time}</span><span class="ticker-head">${inc.headline || '—'}${locStr}</span><span class="ticker-source"> · ${inc.source || '—'}</span></span><span class="ticker-sep">◆</span>`;
+  }
+
+  const html = items.map(buildItem).join('');
+  // Duplicate for seamless loop
+  track.innerHTML = html + html;
+
+  // Speed: 80px/s — set duration after render so scrollWidth is accurate
+  requestAnimationFrame(() => {
+    const halfWidth = track.scrollWidth / 2;
+    track.style.animationDuration = (halfWidth / 80) + 's';
+  });
+}
+
+setInterval(() => { if (activeView === 'map') loadMap(); }, 5 * 60 * 1000);
+setInterval(loadTicker, 5 * 60 * 1000);
+
+loadMap();
+loadTicker();
+</script>
+</body>
+</html>

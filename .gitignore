@@ -1,0 +1,17 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Local data & state — never publish
+intel.db
+intel.db-journal
+intel.db-wal
+intel.db-shm
+pipeline_status.json
+cost_tracker.json
+
+# Throwaway helpers
+scratch/
