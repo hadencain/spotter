@@ -108,7 +108,7 @@ def incidents():
         grouped AS (
             SELECT *,
                    COUNT(*) OVER (PARTITION BY event_key) AS n_sources,
-                   ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) AS rn
+                   ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC, id) AS rn
             FROM filtered WHERE event_key IS NOT NULL
             UNION ALL
             SELECT *, 1 AS n_sources, 1 AS rn FROM filtered WHERE event_key IS NULL
@@ -147,7 +147,7 @@ def reports():
     where = " AND ".join(conditions) if conditions else "1"
     total = conn.execute(
         f"WITH filtered AS (SELECT * FROM incidents WHERE {where}), "
-        f"g AS (SELECT event_key, ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) rn "
+        f"g AS (SELECT event_key, ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC, id) rn "
         f"FROM filtered WHERE event_key IS NOT NULL UNION ALL "
         f"SELECT event_key, 1 FROM filtered WHERE event_key IS NULL) "
         f"SELECT COUNT(*) FROM g WHERE rn = 1", params).fetchone()[0]
@@ -157,7 +157,7 @@ def reports():
         grouped AS (
             SELECT *,
                    COUNT(*) OVER (PARTITION BY event_key) AS n_sources,
-                   ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) AS rn
+                   ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC, id) AS rn
             FROM filtered WHERE event_key IS NOT NULL
             UNION ALL
             SELECT *, 1 AS n_sources, 1 AS rn FROM filtered WHERE event_key IS NULL
