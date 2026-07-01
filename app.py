@@ -203,6 +203,49 @@ def stats():
     })
 
 
+def _cluster(conn, where, params, field):
+    rows = conn.execute(
+        f"""
+        WITH filtered AS (SELECT * FROM incidents WHERE {where}),
+        deduped AS (
+            SELECT * FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) rn
+                FROM filtered WHERE event_key IS NOT NULL)
+            WHERE rn = 1
+            UNION ALL SELECT *, 1 rn FROM filtered WHERE event_key IS NULL)
+        SELECT {field} AS key, COUNT(*) n,
+               GROUP_CONCAT(DISTINCT state) states,
+               GROUP_CONCAT(DISTINCT city) cities,
+               MIN(published_at) first_seen, MAX(published_at) last_seen,
+               GROUP_CONCAT(id) ids
+        FROM deduped WHERE {field} IS NOT NULL AND {field} != ''
+        GROUP BY {field} HAVING COUNT(*) >= 2
+        """,
+        params,
+    ).fetchall()
+    return rows
+
+
+@app.route("/api/patterns")
+def patterns():
+    conn = get_conn()
+    conditions, params = _build_conditions(request.args, mapped_only=False)
+    where = " AND ".join(conditions) if conditions else "1"
+    clusters = []
+    for kind, field in (("retailer", "retailer"), ("mo", "mo")):
+        for r in _cluster(conn, where, params, field):
+            clusters.append({
+                "kind": kind, "key": r["key"], "count": r["n"],
+                "states": (r["states"] or "").split(",") if r["states"] else [],
+                "cities": (r["cities"] or "").split(",") if r["cities"] else [],
+                "first_seen": r["first_seen"], "last_seen": r["last_seen"],
+                "incident_ids": (r["ids"] or "").split(",") if r["ids"] else [],
+            })
+    conn.close()
+    clusters.sort(key=lambda c: c["count"], reverse=True)
+    return jsonify({"clusters": clusters})
+
+
 if __name__ == "__main__":
     init_db()
     app.run(debug=True, port=5050)
