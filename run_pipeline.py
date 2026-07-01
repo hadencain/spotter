@@ -42,7 +42,11 @@ def main():
     run("collecting RSS feeds",   "collector.py")
     run("collecting Reddit",      "reddit_collector.py")
 
-    # Drain extractor in passes until no unprocessed articles remain
+    # Drain extractor in passes until no unprocessed articles remain.
+    # This enriches new/unprocessed articles only. To backfill retail fields
+    # (retail_score, retailer, loss_value, suspect_count, mo, arrested, event_key)
+    # onto incidents already sitting in the DB from before this refresh, run
+    # the one-time backfill separately: venv/Scripts/python extractor.py --retail-backfill
     for pass_num in range(1, 10):
         print(f"\n[{_now()}] extracting (pass {pass_num})")
         result = subprocess.run(
