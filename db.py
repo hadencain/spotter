@@ -58,8 +58,31 @@ def init_db():
             );
 
             CREATE INDEX IF NOT EXISTS idx_raw_processed ON raw_articles(processed);
-            CREATE INDEX IF NOT EXISTS idx_incidents_published ON incidents(published_at);
         """)
+
+        existing = {r[1] for r in conn.execute("PRAGMA table_info(incidents)")}
+
+        # Create index for published_at only if column exists
+        if "published_at" in existing:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_published ON incidents(published_at)")
+
+        # Add new columns idempotently
+        additions = {
+            "retail_score":   "REAL DEFAULT 0",
+            "retailer":       "TEXT",
+            "loss_value":     "TEXT",
+            "suspect_count":  "INTEGER",
+            "mo":             "TEXT",
+            "arrested":       "INTEGER",
+            "event_key":      "TEXT",
+            "geo_confidence": "TEXT",
+        }
+        for col, decl in additions.items():
+            if col not in existing:
+                conn.execute(f"ALTER TABLE incidents ADD COLUMN {col} {decl}")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_retail ON incidents(retail_score)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_event  ON incidents(event_key)")
+        conn.commit()
 
 
 if __name__ == "__main__":
