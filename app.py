@@ -12,6 +12,15 @@ app = Flask(__name__)
 
 RETAIL_THRESHOLD = 0.4
 
+_DEDUP_CTE = """
+WITH deduped AS (
+    SELECT * FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC, id) rn
+        FROM incidents WHERE event_key IS NOT NULL)
+    WHERE rn = 1
+    UNION ALL SELECT *, 1 rn FROM incidents WHERE event_key IS NULL)
+"""
+
 
 def _parse_since(since: str) -> str | None:
     if since == "all":
@@ -181,10 +190,17 @@ def reports():
 @app.route("/api/stats")
 def stats():
     conn = get_conn()
-    total = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
-    geocoded = conn.execute("SELECT COUNT(*) FROM incidents WHERE lat IS NOT NULL").fetchone()[0]
+    total = conn.execute(f"{_DEDUP_CTE} SELECT COUNT(*) FROM deduped").fetchone()[0]
+    geocoded = conn.execute(f"{_DEDUP_CTE} SELECT COUNT(*) FROM deduped WHERE lat IS NOT NULL").fetchone()[0]
+    retail_total = conn.execute(
+        f"{_DEDUP_CTE} SELECT COUNT(*) FROM deduped WHERE retail_score >= ?", (RETAIL_THRESHOLD,)
+    ).fetchone()[0]
+    high_sev = conn.execute(
+        f"{_DEDUP_CTE} SELECT COUNT(*) FROM deduped WHERE retail_score >= ? AND severity >= 4",
+        (RETAIL_THRESHOLD,),
+    ).fetchone()[0]
     by_type = conn.execute(
-        "SELECT incident_type, COUNT(*) as n FROM incidents GROUP BY incident_type ORDER BY n DESC"
+        f"{_DEDUP_CTE} SELECT incident_type, COUNT(*) as n FROM deduped GROUP BY incident_type ORDER BY n DESC"
     ).fetchall()
     conn.close()
 
@@ -198,6 +214,8 @@ def stats():
     return jsonify({
         "total": total,
         "geocoded": geocoded,
+        "retail_total": retail_total,
+        "high_sev": high_sev,
         "by_type": {r["incident_type"]: r["n"] for r in by_type},
         "pipeline": pipeline,
     })
