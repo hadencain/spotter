@@ -524,7 +524,7 @@ def run_retail_backfill(batch_size: int = 50):
     conn = get_conn()
     rows = conn.execute(
         "SELECT id, headline, raw_text, source_url, city, state, incident_type, published_at "
-        "FROM incidents WHERE retail_score IS NULL OR retail_score = 0"
+        "FROM incidents WHERE event_key IS NULL"
     ).fetchall()
     if not rows:
         print("no incidents need retail backfill")
