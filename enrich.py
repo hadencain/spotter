@@ -1,7 +1,7 @@
 import trafilatura
 
 
-def fetch_body(url: str, timeout: int = 10) -> str:
+def fetch_body(url: str) -> str:
     """Fetch and clean article body text. Returns '' on any failure. Never raises."""
     if not url:
         return ""
