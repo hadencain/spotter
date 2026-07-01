@@ -209,17 +209,17 @@ def _cluster(conn, where, params, field):
         WITH filtered AS (SELECT * FROM incidents WHERE {where}),
         deduped AS (
             SELECT * FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) rn
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC, id) rn
                 FROM filtered WHERE event_key IS NOT NULL)
             WHERE rn = 1
             UNION ALL SELECT *, 1 rn FROM filtered WHERE event_key IS NULL)
-        SELECT {field} AS key, COUNT(*) n,
+        SELECT MIN({field}) AS key, COUNT(*) n,
                GROUP_CONCAT(DISTINCT state) states,
                GROUP_CONCAT(DISTINCT city) cities,
                MIN(published_at) first_seen, MAX(published_at) last_seen,
                GROUP_CONCAT(id) ids
-        FROM deduped WHERE {field} IS NOT NULL AND {field} != ''
-        GROUP BY {field} HAVING COUNT(*) >= 2
+        FROM deduped WHERE {field} IS NOT NULL AND TRIM({field}) != ''
+        GROUP BY LOWER(TRIM({field})) HAVING COUNT(*) >= 2
         """,
         params,
     ).fetchall()
