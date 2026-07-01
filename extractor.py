@@ -265,8 +265,7 @@ def extract_tags(text: str, incident_type: str) -> list[str]:
 
 
 def is_retail_candidate(text: str) -> bool:
-    lower = (text or "").lower()
-    return any(kw in lower for kw in RETAIL_KEYWORDS)
+    return is_retail_relevant(text)
 
 
 _ENTITY_SYSTEM = (
@@ -314,6 +313,8 @@ def _llm_extract_entities(headline: str, body: str, client) -> dict:
         raw = msg.content[0].text.strip()
         raw = re.sub(r"```(?:json)?\n?", "", raw).strip("`").strip()
         data = json.loads(raw)
+        if not isinstance(data, dict):
+            return default
     except Exception:
         return default
 
