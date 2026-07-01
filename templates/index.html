@@ -287,6 +287,7 @@
   };
   function catColor(t){ return CATEGORY_COLORS[t] || '#63d6c4'; }
   function catLabel(t){ return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Unknown'; }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
   // categories exposed as their own filter-strip toggle; everything else buckets into "_other"
   const KNOWN_CATS = ['shooting','robbery','theft','assault','threat'];
@@ -447,10 +448,10 @@
     tr.innerHTML = `
       <td><span class="score" style="color:${color}">${score}</span></td>
       <td><span class="tag" style="color:${color}">${catLabel(inc.incident_type)}</span></td>
-      <td><div class="hl">${inc.headline || '—'}</div><div class="nsrc">${nsrc} source${nsrc === 1 ? '' : 's'}</div></td>
-      <td><div class="retailer">${inc.retailer || '—'}</div>${inc.mo ? `<div class="mo">${inc.mo}</div>` : ''}</td>
-      <td>${inc.loss_value ? `<span class="loss">${inc.loss_value}</span>` : '<span class="meta">—</span>'}</td>
-      <td><div class="meta">${fmtLoc(inc)}</div></td>
+      <td><div class="hl">${inc.headline ? esc(inc.headline) : '—'}</div><div class="nsrc">${nsrc} source${nsrc === 1 ? '' : 's'}</div></td>
+      <td><div class="retailer">${inc.retailer ? esc(inc.retailer) : '—'}</div>${inc.mo ? `<div class="mo">${esc(inc.mo)}</div>` : ''}</td>
+      <td>${inc.loss_value ? `<span class="loss">${esc(inc.loss_value)}</span>` : '<span class="meta">—</span>'}</td>
+      <td><div class="meta">${esc(fmtLoc(inc))}</div></td>
       <td><span class="arr ${arrClass}">${arrText}</span></td>`;
     return tr;
   }
@@ -490,8 +491,8 @@
     const clusters = res.clusters || [];
     el.innerHTML = clusters.map(c => `
       <div class="report-row" style="grid-template-columns:110px 1fr 90px 160px">
-        <span class="tag">${c.kind}</span>
-        <div class="hl">${c.key}</div>
+        <span class="tag">${esc(c.kind)}</span>
+        <div class="hl">${esc(c.key)}</div>
         <span class="score">${c.count}</span>
         <div class="meta">${(c.states || []).join(', ')} · ${(c.first_seen||'').slice(0,10)}→${(c.last_seen||'').slice(0,10)}</div>
       </div>`).join('') || '<p class="rsub">No repeat patterns in this window.</p>';
@@ -507,8 +508,8 @@
     function item(inc){
       const t = inc.published_at ? inc.published_at.slice(11, 16) : '--:--';
       const loc = fmtLoc(inc);
-      const locStr = loc && loc !== '—' ? ` — ${loc}` : '';
-      return `<span class="ti"><span class="t">${t}</span><span class="d" style="background:${catColor(inc.incident_type)}"></span><span class="h">${inc.headline || '—'}${locStr}</span><span class="s">· ${inc.source || '—'}</span></span>`;
+      const locStr = loc && loc !== '—' ? ` — ${esc(loc)}` : '';
+      return `<span class="ti"><span class="t">${t}</span><span class="d" style="background:${catColor(inc.incident_type)}"></span><span class="h">${inc.headline ? esc(inc.headline) : '—'}${locStr}</span><span class="s">· ${inc.source ? esc(inc.source) : '—'}</span></span>`;
     }
     const html = items.map(item).join('');
     tt.innerHTML = html + html;
