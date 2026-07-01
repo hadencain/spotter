@@ -264,6 +264,82 @@ def extract_tags(text: str, incident_type: str) -> list[str]:
     return tags
 
 
+def is_retail_candidate(text: str) -> bool:
+    lower = (text or "").lower()
+    return any(kw in lower for kw in RETAIL_KEYWORDS)
+
+
+_ENTITY_SYSTEM = (
+    "You are a retail-crime intelligence classifier. "
+    "Extract structured incident data. Respond with JSON only — no markdown, no prose."
+)
+
+_ENTITY_PROMPT = """From this article extract retail/public-space incident intel.
+
+Return exactly this JSON:
+{{"city":"","state":"","incident_type":"","retail_score":0.0,"retailer":"","loss_value":"","suspect_count":null,"mo":"","arrested":null}}
+
+Rules:
+- state: 2-letter US abbreviation, or "" if unknown.
+- incident_type: one of shooting, stabbing, bombing, robbery, theft, assault, threat, arrest, pursuit, homicide, missing, suspicious, general.
+- retail_score: 0.0-1.0, how strongly this is a retail / mall / shopping-center / store / parking-lot incident.
+- retailer: named store/chain/mall, else "".
+- loss_value: reported dollar loss as short text (e.g. "~$120k"), else "".
+- suspect_count: integer count if stated, else null.
+- mo: short modus operandi (e.g. "smash-and-grab", "flash-mob grab"), else "".
+- arrested: 1 if any arrest made, 0 if suspects at large, null if unknown.
+
+Article:
+{snippet}"""
+
+
+def _coerce_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _llm_extract_entities(headline: str, body: str, client) -> dict:
+    default = {"city": "", "state": "", "incident_type": "general", "retail_score": 0.0,
+              "retailer": "", "loss_value": "", "suspect_count": None, "mo": "", "arrested": None}
+    snippet = f"{headline}\n{(body or '')[:4000]}"
+    try:
+        msg = client.messages.create(
+            model="claude-haiku-4-5", max_tokens=200,
+            system=_ENTITY_SYSTEM,
+            messages=[{"role": "user", "content": _ENTITY_PROMPT.format(snippet=snippet)}],
+        )
+        _accrue(msg.usage)
+        raw = msg.content[0].text.strip()
+        raw = re.sub(r"```(?:json)?\n?", "", raw).strip("`").strip()
+        data = json.loads(raw)
+    except Exception:
+        return default
+
+    state = (data.get("state") or "").strip().upper()
+    if state and state not in STATE_ABBREVS:
+        state = US_STATES.get(state.title(), "")
+    itype = (data.get("incident_type") or "general").strip().lower()
+    if itype not in VALID_TYPES:
+        itype = "general"
+    try:
+        score = max(0.0, min(1.0, float(data.get("retail_score", 0.0))))
+    except (TypeError, ValueError):
+        score = 0.0
+    return {
+        "city": (data.get("city") or "").strip(),
+        "state": state,
+        "incident_type": itype,
+        "retail_score": score,
+        "retailer": (data.get("retailer") or "").strip(),
+        "loss_value": (data.get("loss_value") or "").strip(),
+        "suspect_count": _coerce_int(data.get("suspect_count")),
+        "mo": (data.get("mo") or "").strip(),
+        "arrested": _coerce_int(data.get("arrested")),
+    }
+
+
 def process_article(row, llm_client=None) -> dict | None:
     text = f"{row['headline'] or ''} {row['raw_text'] or ''}"
     if not text.strip():
