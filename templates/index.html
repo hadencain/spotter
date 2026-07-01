@@ -140,6 +140,9 @@
   .arr{font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
   .arr.yes{color:var(--c-orc)} .arr.no{color:var(--c-shooting)} .arr.unk{color:var(--muted)}
 
+  .report-row{display:grid;align-items:center;gap:14px;padding:14px 12px;border-bottom:1px solid var(--line-soft)}
+  .report-row:hover{background:var(--raised)}
+
   #pagination{display:flex;align-items:center;gap:14px;margin-top:18px;font-size:11px;color:var(--muted)}
   #pagination button{background:var(--raised);color:var(--cream);border:1px solid var(--line);
     padding:6px 14px;font-family:inherit;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
@@ -257,6 +260,15 @@
       </div>
     </div>
   </section>
+
+  <!-- ── PATTERNS ── -->
+  <section class="view" id="view-patterns">
+    <div class="rwrap">
+      <h1 class="rtitle">Repeat <em>patterns</em></h1>
+      <p class="rsub">Retailers and MOs recurring across multiple incidents in this window.</p>
+      <div id="patterns-list"></div>
+    </div>
+  </section>
 </div>
 
 <!-- ── news ticker ── -->
@@ -330,22 +342,23 @@
   }));
   document.getElementById('f-since').addEventListener('change', refresh);
 
-  // ── VIEW TABS (Patterns intentionally inert — wired in a later task) ────────
+  // ── VIEW TABS ─────────────────────────────────────────────────────────────
   let activeView = 'map';
   document.querySelectorAll('.view-tab').forEach(t => t.addEventListener('click', () => {
     const v = t.dataset.v;
-    if (v === 'patterns') return;
     document.querySelectorAll('.view-tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     activeView = v;
     document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
     if (v === 'reports') loadReports(1);
+    if (v === 'patterns') loadPatterns();
     if (v === 'map') map.invalidateSize();
   }));
 
   function refresh(){
     if (activeView === 'map') loadMap();
     else if (activeView === 'reports') loadReports(1);
+    else if (activeView === 'patterns') loadPatterns();
   }
 
   // ── MAP ──────────────────────────────────────────────────────────────────────
@@ -469,6 +482,20 @@
 
   document.getElementById('btn-prev').addEventListener('click', () => loadReports(currentPage - 1));
   document.getElementById('btn-next').addEventListener('click', () => loadReports(currentPage + 1));
+
+  // ── PATTERNS ─────────────────────────────────────────────────────────────────
+  async function loadPatterns(){
+    const res = await fetch('/api/patterns?' + filterParams()).then(r => r.json());
+    const el = document.getElementById('patterns-list');
+    const clusters = res.clusters || [];
+    el.innerHTML = clusters.map(c => `
+      <div class="report-row" style="grid-template-columns:110px 1fr 90px 160px">
+        <span class="tag">${c.kind}</span>
+        <div class="hl">${c.key}</div>
+        <span class="score">${c.count}</span>
+        <div class="meta">${(c.states || []).join(', ')} · ${(c.first_seen||'').slice(0,10)}→${(c.last_seen||'').slice(0,10)}</div>
+      </div>`).join('') || '<p class="rsub">No repeat patterns in this window.</p>';
+  }
 
   // ── TICKER ────────────────────────────────────────────────────────────────────
   async function loadTicker(){
