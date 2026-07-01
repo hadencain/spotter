@@ -1,18 +1,14 @@
-import importlib
-import pytest
-
-
-@pytest.fixture
-def client(temp_db):
-    import app as app_module
-    importlib.reload(app_module)
-    return app_module.app.test_client()
-
-
-def test_index_renders(client):
-    r = client.get("/")
+def test_index_renders():
+    import app
+    r = app.app.test_client().get("/")
     assert r.status_code == 200
     body = r.get_data(as_text=True)
-    assert "SPOTTER" in body          # rebranded wordmark present
-    assert "cat-toggle" in body       # category filter strip present
-    assert "ticker" in body           # news ticker present
+    # assert on ACTUAL elements, not substrings that also appear in CSS/<title>
+    assert '<div class="brand">SPOTTER</div>' in body      # wordmark element
+    assert 'data-cat="shooting"' in body                   # category toggle elements
+    assert 'data-cat="theft"' in body
+    assert 'id="ticker"' in body                           # ticker element (not the CSS comment)
+    assert 'id="map"' in body                              # leaflet map container
+    assert 'data-v="patterns"' in body                     # patterns tab present (inert for now)
+    assert "/api/incidents" in body                        # map is wired to the incidents API
+    assert "/api/stats" in body                            # stats bar wired
