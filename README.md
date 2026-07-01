@@ -47,12 +47,24 @@ python app.py            # serve the map at http://127.0.0.1:5050
 geocoding uses OpenStreetMap Nominatim (rate-limited, no key). Without an API key the LLM
 step is skipped and only keyword-based classification runs.
 
+## Dependencies
+
+The following runtime dependencies are pinned in `requirements.txt`:
+- **feedparser** — RSS feed parsing
+- **requests** — HTTP client
+- **flask** — Web server for the map interface
+- **anthropic** — LLM extraction via Claude
+- **trafilatura** — Article body text extraction from HTML
+
+Testing uses **pytest** (in `requirements-dev.txt` if applicable).
+
 ## Layout
 
 | File | Role |
 |------|------|
 | `sources.py` | Feed registry — RSS, Google News queries, Reddit targets |
 | `collector.py` / `reddit_collector.py` | Ingest raw articles |
+| `enrich.py` | Article body fetching via trafilatura |
 | `extractor.py` | LLM + keyword extraction into structured incidents |
 | `geocoder.py` | Resolve locations via Nominatim (cached) |
 | `db.py` | SQLite schema + connection |
