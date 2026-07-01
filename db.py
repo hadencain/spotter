@@ -79,7 +79,11 @@ def init_db():
         }
         for col, decl in additions.items():
             if col not in existing:
-                conn.execute(f"ALTER TABLE incidents ADD COLUMN {col} {decl}")
+                try:
+                    conn.execute(f"ALTER TABLE incidents ADD COLUMN {col} {decl}")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        raise
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_retail ON incidents(retail_score)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_event  ON incidents(event_key)")
         conn.commit()
