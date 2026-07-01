@@ -363,7 +363,8 @@ def process_article(row, llm_client=None) -> dict | None:
         retailer, loss_value, mo = ent["retailer"], ent["loss_value"], ent["mo"]
         suspect_count, arrested = ent["suspect_count"], ent["arrested"]
         if ent["city"] or ent["state"]:
-            city, state = ent["city"], ent["state"]
+            city = ent["city"] or city
+            state = ent["state"] or state
             location_raw = f"{city}, {state}" if city and state else (state or city or "")
         if ent["incident_type"] != "general":
             incident_type = ent["incident_type"]
