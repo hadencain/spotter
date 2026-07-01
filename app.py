@@ -10,6 +10,8 @@ _STATUS_FILE = Path(__file__).parent / "pipeline_status.json"
 
 app = Flask(__name__)
 
+RETAIL_THRESHOLD = 0.4
+
 
 def _parse_since(since: str) -> str | None:
     if since == "all":
@@ -30,8 +32,15 @@ def _build_conditions(args, mapped_only=False):
     conditions = []
     params = []
 
+    mo_param = args.get("mapped_only")
+    if mo_param is not None:
+        mapped_only = mo_param == "1"
     if mapped_only:
         conditions.append("lat IS NOT NULL")
+
+    if args.get("retail") == "1":
+        conditions.append("retail_score >= ?")
+        params.append(RETAIL_THRESHOLD)
 
     since = args.get("since", "7d")
     cutoff = _parse_since(since)
@@ -71,6 +80,15 @@ def _serialize(r):
         "incident_type": r["incident_type"],
         "severity": r["severity"],
         "tags": json.loads(r["tags"] or "[]"),
+        "retail_score": r["retail_score"],
+        "retailer": r["retailer"],
+        "loss_value": r["loss_value"],
+        "suspect_count": r["suspect_count"],
+        "mo": r["mo"],
+        "arrested": r["arrested"],
+        "geo_confidence": r["geo_confidence"],
+        "event_key": r["event_key"],
+        "n_sources": r["n_sources"] if "n_sources" in r.keys() else 1,
     }
 
 
