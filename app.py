@@ -103,7 +103,19 @@ def incidents():
     conditions, params = _build_conditions(request.args, mapped_only=True)
     where = " AND ".join(conditions) if conditions else "1"
     rows = conn.execute(
-        f"SELECT * FROM incidents WHERE {where} ORDER BY published_at DESC LIMIT 3000",
+        f"""
+        WITH filtered AS (SELECT * FROM incidents WHERE {where}),
+        grouped AS (
+            SELECT *,
+                   COUNT(*) OVER (PARTITION BY event_key) AS n_sources,
+                   ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) AS rn
+            FROM filtered WHERE event_key IS NOT NULL
+            UNION ALL
+            SELECT *, 1 AS n_sources, 1 AS rn FROM filtered WHERE event_key IS NULL
+        )
+        SELECT * FROM grouped WHERE rn = 1
+        ORDER BY retail_score DESC, severity DESC, published_at DESC LIMIT 3000
+        """,
         params,
     ).fetchall()
     conn.close()
@@ -133,9 +145,26 @@ def reports():
     sort_dir = "ASC" if request.args.get("order", "desc") == "asc" else "DESC"
 
     where = " AND ".join(conditions) if conditions else "1"
-    total = conn.execute(f"SELECT COUNT(*) FROM incidents WHERE {where}", params).fetchone()[0]
+    total = conn.execute(
+        f"WITH filtered AS (SELECT * FROM incidents WHERE {where}), "
+        f"g AS (SELECT event_key, ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) rn "
+        f"FROM filtered WHERE event_key IS NOT NULL UNION ALL "
+        f"SELECT event_key, 1 FROM filtered WHERE event_key IS NULL) "
+        f"SELECT COUNT(*) FROM g WHERE rn = 1", params).fetchone()[0]
     rows = conn.execute(
-        f"SELECT * FROM incidents WHERE {where} ORDER BY {sort_col} {sort_dir} LIMIT ? OFFSET ?",
+        f"""
+        WITH filtered AS (SELECT * FROM incidents WHERE {where}),
+        grouped AS (
+            SELECT *,
+                   COUNT(*) OVER (PARTITION BY event_key) AS n_sources,
+                   ROW_NUMBER() OVER (PARTITION BY event_key ORDER BY published_at DESC) AS rn
+            FROM filtered WHERE event_key IS NOT NULL
+            UNION ALL
+            SELECT *, 1 AS n_sources, 1 AS rn FROM filtered WHERE event_key IS NULL
+        )
+        SELECT * FROM grouped WHERE rn = 1
+        ORDER BY {sort_col} {sort_dir} LIMIT ? OFFSET ?
+        """,
         params + [per_page, offset],
     ).fetchall()
     conn.close()
