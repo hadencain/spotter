@@ -517,11 +517,51 @@ def run_llm_backfill(batch_size: int = 50):
     print(f"  tokens: {_session_input_tokens}in / {_session_output_tokens}out  cost: ${total:.4f}")
 
 
+def run_retail_backfill(batch_size: int = 50):
+    client = _make_llm_client()
+    if not client:
+        return
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT id, headline, raw_text, source_url, city, state, incident_type, published_at "
+        "FROM incidents WHERE retail_score IS NULL OR retail_score = 0"
+    ).fetchall()
+    if not rows:
+        print("no incidents need retail backfill")
+        conn.close()
+        return
+    updated = 0
+    for i, row in enumerate(rows):
+        text = f"{row['headline'] or ''} {row['raw_text'] or ''}"
+        if not is_retail_candidate(text):
+            continue
+        body = enrich.fetch_body(row["source_url"]) or (row["raw_text"] or "")
+        ent = _llm_extract_entities(row["headline"] or "", body, client)
+        city = ent["city"] or row["city"]
+        state = ent["state"] or row["state"]
+        itype = ent["incident_type"] if ent["incident_type"] != "general" else row["incident_type"]
+        conn.execute(
+            "UPDATE incidents SET retail_score=?, retailer=?, loss_value=?, suspect_count=?, "
+            "mo=?, arrested=?, city=?, state=?, incident_type=?, severity=?, event_key=? WHERE id=?",
+            (ent["retail_score"], ent["retailer"], ent["loss_value"], ent["suspect_count"],
+             ent["mo"], ent["arrested"], city, state, itype, SEVERITY_MAP.get(itype, 1),
+             make_event_key(state, city, itype, row["published_at"] or ""), row["id"]),
+        )
+        updated += 1
+        if (i + 1) % batch_size == 0:
+            conn.commit()
+    conn.commit(); conn.close()
+    print(f"retail backfill done — {updated} incidents enriched")
+    _write_cost_tracker()
+
+
 if __name__ == "__main__":
     use_llm = "--llm" in sys.argv
     backfill = "--backfill" in sys.argv
 
-    if backfill:
+    if "--retail-backfill" in sys.argv:
+        run_retail_backfill()
+    elif backfill:
         run_llm_backfill()
     else:
         run_extraction(use_llm=use_llm)
