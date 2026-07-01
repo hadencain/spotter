@@ -9,7 +9,9 @@ from pathlib import Path
 
 import anthropic
 
+import enrich
 from db import get_conn
+from event_key import make_event_key
 
 # In-workspace this pulls the shared AppConfig; standalone clones fall back to
 # the ANTHROPIC_API_KEY environment variable (see _make_llm_client).
@@ -350,12 +352,25 @@ def process_article(row, llm_client=None) -> dict | None:
 
     incident_type, severity = classify_incident(text)
     location_raw, city, state = extract_location(text)
+    retail_score = 0.0
+    retailer = loss_value = mo = ""
+    suspect_count = arrested = None
 
-    # LLM fallback: fire when location is missing OR type is generic
-    if llm_client and (not location_raw or incident_type == "general"):
+    if llm_client and is_retail_candidate(text):
+        body = enrich.fetch_body(row["source_url"]) or (row["raw_text"] or "")
+        ent = _llm_extract_entities(row["headline"] or "", body, llm_client)
+        retail_score = ent["retail_score"]
+        retailer, loss_value, mo = ent["retailer"], ent["loss_value"], ent["mo"]
+        suspect_count, arrested = ent["suspect_count"], ent["arrested"]
+        if ent["city"] or ent["state"]:
+            city, state = ent["city"], ent["state"]
+            location_raw = f"{city}, {state}" if city and state else (state or city or "")
+        if ent["incident_type"] != "general":
+            incident_type = ent["incident_type"]
+            severity = SEVERITY_MAP.get(incident_type, 1)
+    elif llm_client and (not location_raw or incident_type == "general"):
         llm_loc, llm_city, llm_state, llm_type = _llm_extract(
-            row["headline"] or "", row["raw_text"] or "", llm_client
-        )
+            row["headline"] or "", row["raw_text"] or "", llm_client)
         if not location_raw and llm_loc:
             location_raw, city, state = llm_loc, llm_city, llm_state
         if incident_type == "general" and llm_type != "general":
@@ -363,24 +378,16 @@ def process_article(row, llm_client=None) -> dict | None:
             severity = SEVERITY_MAP.get(incident_type, 1)
 
     tags = extract_tags(text, incident_type)
-
     return {
         "id": str(uuid.uuid4()),
-        "headline": row["headline"],
-        "source": row["source"],
-        "source_url": row["source_url"],
-        "published_at": row["published_at"],
-        "ingested_at": _now(),
-        "raw_text": row["raw_text"],
-        "location_raw": location_raw,
-        "lat": None,
-        "lng": None,
-        "city": city,
-        "state": state,
-        "incident_type": incident_type,
-        "severity": severity,
-        "tags": json.dumps(tags),
-        "reviewed": 0,
+        "headline": row["headline"], "source": row["source"], "source_url": row["source_url"],
+        "published_at": row["published_at"], "ingested_at": _now(), "raw_text": row["raw_text"],
+        "location_raw": location_raw, "lat": None, "lng": None, "city": city, "state": state,
+        "incident_type": incident_type, "severity": severity, "tags": json.dumps(tags), "reviewed": 0,
+        "retail_score": retail_score, "retailer": retailer, "loss_value": loss_value,
+        "suspect_count": suspect_count, "mo": mo, "arrested": arrested,
+        "event_key": make_event_key(state, city, incident_type, row["published_at"] or ""),
+        "geo_confidence": None,
     }
 
 
@@ -416,11 +423,15 @@ def run_extraction(limit: int = 500, use_llm: bool = False):
                     """INSERT INTO incidents
                        (id, headline, source, source_url, published_at, ingested_at,
                         raw_text, location_raw, lat, lng, city, state,
-                        incident_type, severity, tags, reviewed)
+                        incident_type, severity, tags, reviewed,
+                        retail_score, retailer, loss_value, suspect_count, mo, arrested,
+                        event_key, geo_confidence)
                        VALUES
                        (:id, :headline, :source, :source_url, :published_at, :ingested_at,
                         :raw_text, :location_raw, :lat, :lng, :city, :state,
-                        :incident_type, :severity, :tags, :reviewed)""",
+                        :incident_type, :severity, :tags, :reviewed,
+                        :retail_score, :retailer, :loss_value, :suspect_count, :mo, :arrested,
+                        :event_key, :geo_confidence)""",
                     incident,
                 )
                 inserted += 1
