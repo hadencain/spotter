@@ -1,11 +1,18 @@
+import os
 import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "intel.db"
 
 
+def _db_path() -> Path:
+    """Resolve the DB path at call time so tests can override via SPOTTER_DB."""
+    override = os.environ.get("SPOTTER_DB")
+    return Path(override) if override else DB_PATH
+
+
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
