@@ -48,13 +48,29 @@ def _cache_store(conn, location_raw: str, lat, lng):
     )
 
 
+def resolve_with_confidence(location_raw, city, state, lookup=_nominatim_lookup):
+    """Try point -> city centroid -> state centroid. Returns (lat, lng, confidence)."""
+    if location_raw:
+        lat, lng = lookup(location_raw)
+        if lat is not None:
+            return lat, lng, "point"
+    if city and state:
+        lat, lng = lookup(f"{city}, {state}")
+        if lat is not None:
+            return lat, lng, "city"
+    if state:
+        lat, lng = lookup(state)
+        if lat is not None:
+            return lat, lng, "state"
+    return None, None, "none"
+
+
 def geocode_incidents(limit: int = 5000):
     conn = get_conn()
 
     rows = conn.execute(
-        """SELECT id, location_raw FROM incidents
-           WHERE lat IS NULL AND location_raw != '' AND location_raw IS NOT NULL
-           LIMIT ?""",
+        "SELECT id, location_raw, city, state FROM incidents "
+        "WHERE lat IS NULL AND (location_raw != '' OR state != '') LIMIT ?",
         (limit,),
     ).fetchall()
 
@@ -64,32 +80,22 @@ def geocode_incidents(limit: int = 5000):
 
     resolved = 0
     failed = 0
-    cached = 0
 
     for row in rows:
-        loc = row["location_raw"]
-
-        # Check cache first
-        lat, lng = _cache_lookup(conn, loc)
+        lat, lng, conf = resolve_with_confidence(row["location_raw"], row["city"], row["state"])
+        time.sleep(RATE_LIMIT_SECONDS)
+        conn.execute(
+            "UPDATE incidents SET lat=?, lng=?, geo_confidence=? WHERE id=?",
+            (lat, lng, conf, row["id"]),
+        )
         if lat is not None:
-            cached += 1
-        else:
-            lat, lng = _nominatim_lookup(loc)
-            _cache_store(conn, loc, lat, lng)
-            time.sleep(RATE_LIMIT_SECONDS)
-
-        if lat is not None:
-            conn.execute(
-                "UPDATE incidents SET lat = ?, lng = ? WHERE id = ?",
-                (lat, lng, row["id"]),
-            )
             resolved += 1
         else:
             failed += 1
 
     conn.commit()
     conn.close()
-    print(f"geocoding done — {resolved} resolved ({cached} from cache), {failed} failed")
+    print(f"geocoding done — {resolved} resolved, {failed} failed")
 
 
 if __name__ == "__main__":
