@@ -90,3 +90,15 @@ def test_incidents_null_event_key_not_merged(client, temp_db):
     data = c.get("/api/incidents?since=all").get_json()
     assert data["count"] == 2  # NULL event_key rows never merged
     assert all(i["n_sources"] == 1 for i in data["incidents"])
+
+
+def test_reports_ids_filter(client, temp_db):
+    for i in range(3):
+        _insert(temp_db, id=f"x{i}", headline=f"h{i}", event_key=f"X{i}",
+                retail_score=0.5, severity=3, incident_type="theft",
+                published_at="2026-07-01T00:00:00+00:00", tags="[]")
+    _, c = client
+    data = c.get("/api/reports?since=all&mapped_only=0&ids=x0,x2").get_json()
+    got = {i["id"] for i in data["incidents"]}
+    assert got == {"x0", "x2"}
+    assert data["total"] == 2

@@ -71,6 +71,14 @@ def _build_conditions(args, mapped_only=False):
     conditions.append("severity >= ?")
     params.append(min_sev)
 
+    # explicit id list (comma-separated) — used by the patterns view to expand a cluster
+    ids = args.get("ids")
+    if ids:
+        id_list = [s for s in ids.split(",") if s][:200]
+        if id_list:
+            conditions.append(f"id IN ({','.join(['?'] * len(id_list))})")
+            params.extend(id_list)
+
     return conditions, params
 
 
