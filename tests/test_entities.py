@@ -30,3 +30,21 @@ def test_classify_chains():
     assert classify("Target") == "chain"
     assert classify("Kay Outlet") == "chain"        # bare 'outlet' is NOT a venue word
     assert classify("Nordstrom") == "chain"
+
+
+def test_normalize_never_strips_to_empty():
+    assert normalize("Store 24") == "store 24"   # a real chain name, not a store-number suffix
+
+
+def test_normalize_coerces_non_string():
+    assert normalize(3) == "3"                   # dynamic-typed DB value must not crash
+
+
+def test_classify_empty_defaults_to_chain():
+    assert classify("") == "chain"
+    assert classify(None) == "chain"
+
+
+def test_classify_plural_and_british_venues():
+    assert classify("Westfield Malls") == "venue"
+    assert classify("City Centre") == "venue"

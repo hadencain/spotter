@@ -15,7 +15,10 @@ from rapidfuzz import fuzz
 
 FUZZ_THRESHOLD = 90
 
-_VENUE_WORDS = {"mall", "plaza", "center", "centre", "galleria", "shopping"}
+_VENUE_WORDS = {
+    "mall", "malls", "plaza", "plazas", "center", "centers",
+    "centre", "centres", "galleria", "gallerias", "shopping",
+}
 
 _PUNCT_RE = re.compile(r"[^\w\s&']")
 # trailing store numbers: "store 45" (any digits) or a bare 3-6 digit suffix
@@ -23,12 +26,13 @@ _PUNCT_RE = re.compile(r"[^\w\s&']")
 _STORE_NUM_RE = re.compile(r"\b(?:store\s+\d{1,6}|\d{3,6})$")
 
 
-def normalize(s: str) -> str:
-    s = (s or "").casefold().strip()
+def normalize(s) -> str:
+    s = "" if s is None else str(s)
+    s = s.casefold().strip()
     s = _PUNCT_RE.sub(" ", s)
     s = " ".join(s.split())
-    s = _STORE_NUM_RE.sub("", s).strip()
-    return s
+    stripped = _STORE_NUM_RE.sub("", s).strip()
+    return stripped if stripped else s  # never strip a name down to nothing ("Store 24")
 
 
 def classify(s: str) -> str:
