@@ -4,6 +4,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
+import analysis
 from db import get_conn, init_db
 
 _STATUS_FILE = Path(__file__).parent / "pipeline_status.json"
@@ -270,6 +271,68 @@ def patterns():
     conn.close()
     clusters.sort(key=lambda c: c["count"], reverse=True)
     return jsonify({"clusters": clusters})
+
+
+def _analysis_args():
+    return {
+        "since": request.args.get("since", "30d"),
+        "retail": request.args.get("retail") == "1",
+    }
+
+
+@app.route("/api/analysis/hotspots")
+def analysis_hotspots():
+    conn = get_conn()
+    try:
+        return jsonify(analysis.hotspots(conn, itype=request.args.get("type") or None,
+                                         **_analysis_args()))
+    finally:
+        conn.close()
+
+
+@app.route("/api/analysis/heatmap")
+def analysis_heatmap():
+    conn = get_conn()
+    try:
+        return jsonify(analysis.heatmap(conn, itype=request.args.get("type") or None,
+                                        **_analysis_args()))
+    finally:
+        conn.close()
+
+
+@app.route("/api/analysis/temporal")
+def analysis_temporal():
+    conn = get_conn()
+    try:
+        return jsonify(analysis.temporal(conn, itype=request.args.get("type") or None,
+                                         **_analysis_args()))
+    finally:
+        conn.close()
+
+
+@app.route("/api/analysis/tracks")
+def analysis_tracks():
+    conn = get_conn()
+    try:
+        return jsonify(analysis.tracks(conn, **_analysis_args()))
+    finally:
+        conn.close()
+
+
+@app.route("/api/analysis/corridors")
+def analysis_corridors():
+    conn = get_conn()
+    try:
+        payload = analysis.corridors(conn, **_analysis_args())
+    finally:
+        conn.close()
+    payload["narrative"] = None
+    if request.args.get("narrative") == "1":
+        text, err = analysis.build_narrative(payload)
+        payload["narrative"] = text
+        if err:
+            payload["narrative_error"] = err
+    return jsonify(payload)
 
 
 if __name__ == "__main__":

@@ -119,6 +119,49 @@ database; only the API/UI views collapse them.
   ORC-intelligence payoff: it surfaces repeat retailers being hit and repeat MOs/crews
   moving across locations.
 - **Ticker** — bottom sliding banner of recent reports (`/api/reports?since=24h`).
+- **Analysis** (`/api/analysis/*`) — temporal-spatial pattern layer; see below.
+
+## Analysis layer
+
+> ⚠ **Standing caveat, repeated in every analysis response and UI surface:** extraction
+> and geocoding are lossy; timestamps are publish times, not incident times. Analysis
+> output is a set of **directional leads for allocating patrol attention — never claims
+> about specific businesses or people.**
+
+`analysis.py` is a read-only layer over the incident store (it never writes, and never
+touches ingestion). All numbers are deterministic — SQL plus arithmetic; the LLM is used
+only, optionally, to phrase the finished corridor report as a brief. Four methods:
+
+- **Hotspots** (`/api/analysis/hotspots`) — deduped incidents binned into ~5 km grid
+  cells, weighted by severity and recency, smoothed across neighbors, and trended
+  window-over-window (`emerging / rising / stable / cooling`). Uses **only**
+  `geo_confidence='point'` rows — city/state centroid fallbacks and legacy rows without
+  a confidence tier are excluded, because they'd fabricate hotspots at centroids.
+- **Heatmap** (`/api/analysis/heatmap`) — weighted points plus ISO-week slices for the
+  map's **Heat** toggle (leaflet.heat), with a week scrubber and trend-colored
+  outlines around the top cells.
+- **Temporal** (`/api/analysis/temporal`) — day-of-week × 3-hour-block matrix.
+  Publish stamps are a proxy: date-only stamps (about half the data) count toward
+  day-of-week but never hour-of-day; hours are shifted to approximate local (solar)
+  time by longitude; below 30 hour-reliable rows the hour axis is suppressed
+  entirely. Expect a newsroom-rhythm bias (weekday-daytime spike) in the hour data.
+- **Tracks** (`/api/analysis/tracks`) — sequence linking: incidents sharing a
+  normalized retailer (strong) or overlapping MO tokens (weak) are chained in time
+  order, each hop ≤ 14 days and ≤ 400 km, chains of ≥ 3 emitted as probable crew
+  movement tracks with per-hop distance/heading. `confidence` is a heuristic lead
+  score, not a probability.
+
+**Corridors** (`/api/analysis/corridors`) composes all of the above into the ranked
+"patrol these corridors" report shown on the **Analysis** tab: hotspot cells become
+corridor anchors (with cell-local timing when the cell has enough signal, and any
+tracks passing within 50 km attached); strong tracks away from any hotspot get their
+own entries. `?narrative=1` adds an LLM-written ≤200-word brief (needs
+`ANTHROPIC_API_KEY`; degrades to `narrative: null` without one — the LLM never
+generates or aggregates numbers, it only rephrases the computed report).
+
+Known artifact: trend labels skew toward `emerging`/`new` until two full windows of
+post-`geo_confidence`-migration data exist, since older point rows lack the tier and
+are excluded from the prior window.
 
 ## Dependencies
 
