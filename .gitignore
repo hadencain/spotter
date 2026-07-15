@@ -15,3 +15,8 @@ cost_tracker.json
 
 # Throwaway helpers
 scratch/
+
+session_log.md
+docs/superpowers/
+.superpowers/
+.claude/
