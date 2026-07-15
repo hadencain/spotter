@@ -4,12 +4,14 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+.env.*
+.pytest_cache/
 
 # Local data & state — never publish
-intel.db
-intel.db-journal
-intel.db-wal
-intel.db-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 pipeline_status.json
 cost_tracker.json
 
