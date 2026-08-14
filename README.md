@@ -47,6 +47,14 @@ pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
+### Environment
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | unset | LLM extraction. Without it the LLM step is skipped and only keyword classification runs. |
+| `SPOTTER_USER_AGENT` | `spotter/0.1 (+<repo url>)` | Identifies your instance to Nominatim, Reddit, and feed hosts. **Set this if you run your own instance** — Nominatim's usage policy wants a UA that identifies the operator, and every clone sharing one string means one clone's abuse rate-limits all of them. |
+| `SPOTTER_DEBUG` | unset | `1`/`true`/`yes` enables Flask's debugger. Off by default: Werkzeug's debugger is an interactive console on any unhandled exception, so never enable it on a reachable interface. |
+
 ## Run
 
 ```bash
@@ -142,6 +150,7 @@ The following runtime dependencies are pinned in `requirements.txt`:
 | `extractor.py` | Retail prefilter + LLM/keyword extraction into structured incidents, `--retail-backfill` for existing DBs |
 | `geocoder.py` | Resolve locations via Nominatim with confidence tiers (cached) |
 | `db.py` | SQLite schema + connection |
+| `user_agent.py` | Single outbound User-Agent for Nominatim / Reddit / RSS, overridable via env |
 | `app.py` | Flask map + reports + patterns API |
 | `run_pipeline.py` | Orchestrates the full pass |
 

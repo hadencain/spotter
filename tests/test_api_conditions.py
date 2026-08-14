@@ -18,6 +18,20 @@ def test_mapped_only_query_param_can_disable():
     assert "lat IS NOT NULL" not in conds
 
 
+def test_int_arg_falls_back_on_junk_and_clamps():
+    assert app._int_arg({"page": "not-a-number"}, "page", 1, minimum=1) == 1
+    assert app._int_arg({}, "page", 1, minimum=1) == 1
+    assert app._int_arg({"page": "-4"}, "page", 1, minimum=1) == 1
+    assert app._int_arg({"page": "7"}, "page", 1, minimum=1) == 7
+    assert app._int_arg({"severity": "-2"}, "severity", 1) == -2  # no minimum, passes through
+
+
+def test_build_conditions_survives_junk_severity():
+    conds, params = app._build_conditions({"severity": "high", "since": "all"})
+    assert "severity >= ?" in conds
+    assert 1 in params
+
+
 def test_serialize_includes_new_fields():
     row = {k: None for k in (
         "id headline source source_url published_at location_raw lat lng city state "

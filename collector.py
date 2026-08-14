@@ -10,6 +10,7 @@ socket.setdefaulttimeout(10)  # don't hang forever on slow/dead feeds
 
 from db import get_conn, init_db
 from sources import RSS_FEEDS
+from user_agent import USER_AGENT
 
 
 def _article_id(url: str) -> str:
@@ -55,7 +56,7 @@ def collect_rss(conn):
     for feed_cfg in RSS_FEEDS:
         name = feed_cfg["name"]
         try:
-            feed = feedparser.parse(feed_cfg["url"])
+            feed = feedparser.parse(feed_cfg["url"], agent=USER_AGENT)
             for entry in feed.entries:
                 url = entry.get("link", "")
                 headline = entry.get("title", "")

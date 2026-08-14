@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 import requests
 
 from db import get_conn
+from user_agent import USER_AGENT
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "MallIntelPlatform/0.1 (security-research-tool)"
 RATE_LIMIT_SECONDS = 1.1  # Nominatim requires >= 1 req/sec
 
 

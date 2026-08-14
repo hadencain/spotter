@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -37,6 +38,15 @@ def _parse_since(since: str) -> str | None:
     return None
 
 
+def _int_arg(args, name, default, minimum=None):
+    """Read an int query param, falling back to the default on missing or junk input."""
+    try:
+        value = int(args.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return value if minimum is None else max(minimum, value)
+
+
 def _build_conditions(args, mapped_only=False):
     conditions = []
     params = []
@@ -67,7 +77,7 @@ def _build_conditions(args, mapped_only=False):
         conditions.append("incident_type = ?")
         params.append(itype)
 
-    min_sev = int(args.get("severity", "1"))
+    min_sev = _int_arg(args, "severity", 1)
     conditions.append("severity >= ?")
     params.append(min_sev)
 
@@ -154,7 +164,7 @@ def reports():
     conn = get_conn()
     conditions, params = _build_conditions(request.args, mapped_only=False)
 
-    page = max(1, int(request.args.get("page", 1)))
+    page = _int_arg(request.args, "page", 1, minimum=1)
     per_page = 100
     offset = (page - 1) * per_page
 
@@ -274,4 +284,7 @@ def patterns():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, port=5050)
+    # Werkzeug's debugger is an interactive console on any unhandled exception —
+    # opt in explicitly with SPOTTER_DEBUG=1, and never on a reachable interface.
+    debug = os.environ.get("SPOTTER_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(debug=debug, port=5050)

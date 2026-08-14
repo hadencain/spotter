@@ -7,8 +7,7 @@ from email.utils import parsedate_to_datetime
 import feedparser
 
 from db import get_conn, init_db
-
-USER_AGENT = "MallIntelPlatform/0.1 (security-research-tool)"
+from user_agent import USER_AGENT
 
 # ---------------------------------------------------------------------------
 # Source definitions
