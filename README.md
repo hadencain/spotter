@@ -10,31 +10,6 @@ retail crime, parking-lot incidents, and similar. Every incident is scored for r
 relevance (`retail_score`), and the UI defaults to a **Retail** view (with an **All**
 toggle) ranked retail-first. The source list is just a registry you can edit.
 
-## ⚠️ Caveats — read before trusting anything on the map
-
-- **Extraction is lossy.** Location and category are inferred by an LLM (Claude Haiku)
-  from headlines and, for retail candidates, the fetched article body. It gets things
-  wrong — sometimes parsing a headline fragment as a place. Treat the map as a rough
-  situational-awareness sketch, **not an authoritative record**. Do not use it to make
-  claims about specific businesses or locations.
-- **Entity fields are LLM-derived leads, not verified facts.** `retailer`, `loss_value`,
-  `suspect_count`, `mo`, and `arrested` are pulled from public reporting by the LLM and can
-  be wrong, incomplete, or mis-attributed. Treat them as **investigative leads to check
-  against the source article, not accusations or confirmed facts.** `suspect_count` is a
-  count only, never treat it as identifying information.
-- **Geocoding is approximate** and lands in one of four confidence tiers — see
-  `geo_confidence` below. Roughly 60% of incidents resolve to a precise point; the rest
-  fall back to a city or state centroid (dashed pin) or stay ungeocoded (visible in
-  Reports, absent from the map).
-- All data is derived from already-public sources, but aggregation is its own artifact.
-  Be thoughtful about republishing the resulting database.
-
-## What's here / not here
-
-The code is published; the **data is not**. `intel.db` (the SQLite store of extracted
-incidents) is gitignored, along with the venv and local run state. Clone this and you get a
-clean, empty tool — run the pipeline to populate your own database.
-
 ## Setup
 
 ```bash
